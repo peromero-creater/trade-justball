@@ -1,0 +1,44 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Crypto Trading Terminal — Integration Overview</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Helvetica,Arial,sans-serif;margin:0;background:#0f1115;color:#e4e7ec}
+    .wrap{max-width:860px;margin:40px auto;padding:0 16px;line-height:1.55}
+    h1{font-size:28px;margin:0 0 12px}
+    h2{font-size:20px;margin:28px 0 8px}
+    code,pre{background:#141822;border:1px solid #242b3a;border-radius:8px;padding:12px;display:block;overflow:auto}
+    a{color:#7fd18c;text-decoration:none}
+    .muted{color:#9aa3b2}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Crypto Trading Terminal — Integration Overview</h1>
+    <p class="muted">Status: internal/student prototype (non-public)</p>
+    <p>We will integrate TradingView <b>Trading Platform (Terminal)</b> with our <b>own</b> market-data and trading backend (UDF + WebSocket). No TradingView data is used.</p>
+
+    <h2>Data Feed we provide</h2>
+    <p><b>UDF (HTTP)</b> — Base URL: <i>https://API.BASE.URL/udf</i> (placeholder)</p>
+<pre>{
+  "supported_resolutions": ["1","5","15","60","1D"],
+  "supports_group_request": false,
+  "supports_search": true,
+  "supports_marks": false,
+  "supports_timescale_marks": false
+}</pre>
+    <p><code>/symbols?symbol=BTCUSDT</code> • <code>/history?symbol=BTCUSDT&resolution=1&from=&lt;sec&gt;&to=&lt;sec&gt;</code> • <code>/time</code></p>
+
+    <h2>Realtime (WebSocket)</h2>
+    <p><code>/ws/bars?symbol=BTCUSDT&res=1</code> • <code>/ws/depth?symbol=BTCUSDT</code></p>
+
+    <h2>Initial Symbol</h2>
+    <p><code>BTCUSDT</code> (more later)</p>
+
+    <h2>Contact</h2>
+    <p>Alperen Yazıcı · GitHub: <a href="https://github.com/peromero-creater" target="_blank">peromero-creater</a></p>
+  </div>
+</body>
+</html>
