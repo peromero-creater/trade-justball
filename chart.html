@@ -1,183 +1,82 @@
-<script>
-    // Show errors on page
-    const showErr = (msg) => { const e = document.getElementById('err'); if (e) e.textContent = String(msg||''); };
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>LW Charts — Minimal Demo</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!-- Pin to v4 UMD bundle -->
+  <script src="https://unpkg.com/lightweight-charts@4/dist/lightweight-charts.standalone.production.js"></script>
+  <style>
+    body{margin:0;background:#0f1115;color:#e4e7ec;font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Helvetica,Arial,sans-serif}
+    #app{padding:18px}
+    #c{height:520px;border:1px solid #242b3a;border-radius:12px}
+    #err{white-space:pre-wrap;color:#ff6b6b;margin-top:12px}
+  </style>
+</head>
+<body>
+  <div id="app">
+    <h2>Lightweight Charts — Minimal</h2>
+    <div id="c"></div>
+    <div id="err"></div>
+  </div>
+
+  <script>
+    const showErr = m => document.getElementById('err').textContent = String(m||'');
     window.addEventListener('error', e => showErr(e.message));
     window.addEventListener('unhandledrejection', e => showErr(e.reason?.message || e.reason || e));
-  
-    // Demo until Kenan gives endpoints
-    const DEMO = true;
-    const API_HISTORY = 'https://YOUR_API/history';
-    const WS_BARS     = 'wss://YOUR_API/ws/bars';
-    const WS_DEPTH    = 'wss://YOUR_API/ws/depth';
-  
-    const sp = new URLSearchParams(location.search);
-    const symEl = document.getElementById('sym');
-    const resEl = document.getElementById('res');
-    if (sp.get('symbol')) symEl.value = sp.get('symbol').toUpperCase();
-    if (sp.get('res')) resEl.value = sp.get('res');
-  
-    const statusEl = document.getElementById('status');
-    const titleEl  = document.getElementById('title');
-  
-    // ----- Chart setup (rename to avoid ID collision) -----
-    const container = document.getElementById('chart');
+
+    // 1) Library sanity check
+    if (!window.LightweightCharts || !LightweightCharts.createChart) {
+      showErr('LightweightCharts failed to load'); throw new Error('LW not loaded');
+    }
+
+    // 2) Create chart (rename variable so it can’t clash with #c)
+    const container = document.getElementById('c');
     const lwChart = LightweightCharts.createChart(container, {
-      layout: { background:{type:'Solid', color:'#0f1115'}, textColor:'#d0d2d6' },
-      grid: { vertLines:{color:'#1b1e26'}, horzLines:{color:'#1b1e26'} },
-      timeScale: { timeVisible:true, secondsVisible:true },
+      layout: { background: { type: 'Solid', color: '#0f1115' }, textColor: '#d0d2d6' },
+      grid:   { vertLines: { color: '#1b1e26' }, horzLines: { color: '#1b1e26' } },
+      timeScale: { timeVisible: true, secondsVisible: true }
     });
-  
-    // Smoke check (helps if CDN didn’t load)
-    if (!lwChart || typeof lwChart.addCandlestickSeries !== 'function') {
-      showErr('LightweightCharts did not load correctly.');
+
+    const candles = lwChart.addCandlestickSeries();
+    const volume  = lwChart.addHistogramSeries({ priceScaleId: '' });
+    lwChart.priceScale('').applyOptions({ scaleMargins: { top: 0.8, bottom: 0 } });
+
+    // 3) Generate a small random history and set it
+    const now = Math.floor(Date.now()/1000);
+    const step = 60; // 1m
+    let t = now - 60*60*3; // last 3h
+    t -= t % step;
+    let price = 64000;
+    const bars = [];
+    while (t < now) {
+      const o = price;
+      const c = o + (Math.random()*2 - 1)*25;
+      const h = Math.max(o, c) + Math.random()*10;
+      const l = Math.min(o, c) - Math.random()*10;
+      const v = Math.abs(5 + (Math.random()-0.5)*2);
+      bars.push({ time:t, open:+o.toFixed(2), high:+h.toFixed(2), low:+l.toFixed(2), close:+c.toFixed(2), volume:+v.toFixed(4) });
+      price = c; t += step;
     }
-  
-    const candle = lwChart.addCandlestickSeries();
-    const vol    = lwChart.addHistogramSeries({ priceScaleId: '' });
-    lwChart.priceScale('').applyOptions({ scaleMargins:{ top:0.8, bottom:0 } });
-  
-    // ----- Helpers -----
-    const msToSec = t => (t > 1e12 ? Math.floor(t/1000) : t);
-    const fromUDF = j => j.t.map((t,i)=>({ time:t, open:+j.o[i], high:+j.h[i], low:+j.l[i], close:+j.c[i], volume:+j.v[i] }));
-    const fromArr = a => a.map(b=>({ time:msToSec(b.time), open:+b.open, high:+b.high, low:+b.low, close:+b.close, volume:+b.volume }));
-    const paintVol = bars => vol.setData(bars.map(b=>({ time:b.time, value:b.volume, color:b.close>=b.open?'#26a69a':'#ef5350' })));
-    const stepOf = (res) => res==='1D'?86400 : res==='60'?3600 : res==='15'?900 : res==='5'?300 : 60;
-  
-    let lastBar = null;
-  
-    // ----- DEMO generators -----
-    function genHistory(symbol, res, hours=6){
-      const step = stepOf(res);
-      const to = Math.floor(Date.now()/1000);
-      let t = Math.floor((to - hours*3600)/step)*step;
-      let price = 64000, bars = [];
-      while (t < to){
-        const open = price;
-        const close = open + (Math.random()*2-1)*30;
-        const high = Math.max(open, close) + Math.random()*10;
-        const low  = Math.min(open, close) - Math.random()*10;
-        const volume = Math.abs(8 + (Math.random()-0.5)*3);
-        bars.push({ time:t, open:+open.toFixed(2), high:+high.toFixed(2), low:+low.toFixed(2), close:+close.toFixed(2), volume:+volume.toFixed(4) });
-        price = close; t += step;
+    candles.setData(bars);
+    volume.setData(bars.map(b => ({ time:b.time, value:b.volume, color:b.close>=b.open ? '#26a69a' : '#ef5350' })));
+
+    // 4) Keep it ticking in demo
+    let last = bars[bars.length-1];
+    setInterval(() => {
+      const n = Math.floor(Date.now()/1000);
+      const onNewBar = n >= last.time + step;
+      if (onNewBar) {
+        last = { time: n - (n%step), open: last.close, high: last.close, low: last.close, close: last.close, volume: 0 };
       }
-      return bars;
-    }
-    function genDepth(mid=64200){
-      const bids = [], asks = [];
-      for (let i=1;i<=10;i++){
-        bids.push([+(mid - i*5).toFixed(2), +(0.2 + i*0.05).toFixed(4)]);
-        asks.push([+(mid + i*5).toFixed(2), +(0.2 + i*0.05).toFixed(4)]);
-      }
-      return {bids, asks, ts: Math.floor(Date.now()/1000)};
-    }
-  
-    // ----- Load history -----
-    async function loadHistory(symbol, res){
-      try{
-        if (DEMO){
-          const bars = genHistory(symbol, res, 6);
-          candle.setData(bars);
-          paintVol(bars);
-          lastBar = bars[bars.length - 1] || null;
-          statusEl.textContent = `demo: ${bars.length} bars`;
-          return;
-        }
-        statusEl.textContent = 'loading...';
-        const to = Math.floor(Date.now()/1000), from = to - 60*60*6;
-        const url = `${API_HISTORY}?symbol=${encodeURIComponent(symbol)}&resolution=${res}&from=${from}&to=${to}`;
-        const r = await fetch(url);
-        const j = await r.json();
-        const bars = (j && j.s==='ok' && Array.isArray(j.t)) ? fromUDF(j)
-                  : Array.isArray(j) ? fromArr(j) : [];
-        candle.setData(bars); paintVol(bars);
-        lastBar = bars[bars.length - 1] || null;
-        statusEl.textContent = `loaded ${bars.length} bars`;
-      }catch(e){ showErr(e); }
-    }
-  
-    // ----- Realtime bars -----
-    let wsBars, demoBarTimer;
-    function startBars(symbol, res){
-      try{
-        if (DEMO){
-          clearInterval(demoBarTimer);
-          const step = stepOf(res);
-          demoBarTimer = setInterval(()=>{
-            const now = Math.floor(Date.now()/1000);
-            if (!lastBar || now - lastBar.time >= step){
-              const open = lastBar ? lastBar.close : 64000;
-              lastBar = { time: now - (now % step), open: open, high: open, low: open, close: open, volume: 0 };
-            }
-            const c = lastBar.close + (Math.random()*2-1)*6;
-            lastBar.high = Math.max(lastBar.high, c);
-            lastBar.low  = Math.min(lastBar.low, c);
-            lastBar.close = +c.toFixed(2);
-            lastBar.volume = +(lastBar.volume + Math.abs((Math.random()-0.5)*0.2)).toFixed(4);
-  
-            candle.update(lastBar);
-            vol.update({ time:lastBar.time, value:lastBar.volume, color:lastBar.close>=lastBar.open?'#26a69a':'#ef5350' });
-            statusEl.textContent = 'demo live';
-          }, 1000);
-          return;
-        }
-        if (wsBars) wsBars.close();
-        wsBars = new WebSocket(`${WS_BARS}?symbol=${encodeURIComponent(symbol)}&res=${encodeURIComponent(res)}`);
-        wsBars.onopen = () => statusEl.textContent = 'live';
-        wsBars.onclose = () => statusEl.textContent = 'reconnecting...';
-        wsBars.onerror = (e) => showErr(e?.message || 'ws error');
-        wsBars.onmessage = ev=>{
-          const m = JSON.parse(ev.data);
-          const b = m.t ? { time:m.t, open:+m.o, high:+m.h, low:+m.l, close:+m.c, volume:+m.v }
-                        : { time:msToSec(m.time), open:+m.open, high:+m.high, low:+m.low, close:+m.close, volume:+m.volume };
-          candle.update(b);
-          vol.update({ time:b.time, value:b.volume, color:b.close>=b.open?'#26a69a':'#ef5350' });
-          lastBar = b;
-        };
-      }catch(e){ showErr(e); }
-    }
-  
-    // ----- Depth panel -----
-    let wsDepth, demoDepthTimer;
-    function startDepth(symbol){
-      const tbody = document.getElementById('depth-body');
-      function render(book){
-        const bids = (book.bids||[]).slice(0,10);
-        const asks = (book.asks||[]).slice(0,10);
-        const n = Math.max(bids.length, asks.length);
-        const rows = [];
-        for (let i=0;i<n;i++){
-          const b = bids[i] || ['',''], a = asks[i] || ['',''];
-          rows.push(`<tr><td class="bid">${b[0]??''}</td><td class="bid">${b[1]??''}</td><td></td><td class="ask">${a[0]??''}</td><td class="ask">${a[1]??''}</td></tr>`);
-        }
-        tbody.innerHTML = rows.join('');
-      }
-      if (DEMO){
-        clearInterval(demoDepthTimer);
-        demoDepthTimer = setInterval(()=>{
-          const mid = 64200 + (Math.random()*2-1)*12;
-          render(genDepth(mid));
-        }, 1000);
-        return;
-      }
-      if (wsDepth) wsDepth.close();
-      wsDepth = new WebSocket(`${WS_DEPTH}?symbol=${encodeURIComponent(symbol)}`);
-      wsDepth.onmessage = ev => render(JSON.parse(ev.data));
-      wsDepth.onclose = () => setTimeout(()=>startDepth(symbol), 1000);
-    }
-  
-    async function boot(symbol, res){
-      titleEl.textContent = `Chart — ${symbol} (${res}) ${DEMO ? '• demo' : ''}`;
-      await loadHistory(symbol, res);
-      startBars(symbol, res);
-      startDepth(symbol);
-      history.replaceState(null,'',`?symbol=${encodeURIComponent(symbol)}&res=${encodeURIComponent(res)}`);
-    }
-  
-    document.getElementById('apply').onclick = ()=>{
-      boot(symEl.value.trim().toUpperCase(), resEl.value);
-    };
-  
-    // First run
-    boot(symEl.value.trim().toUpperCase(), resEl.value);
+      const c = last.close + (Math.random()*2-1)*6;
+      last.high = Math.max(last.high, c);
+      last.low  = Math.min(last.low, c);
+      last.close = +c.toFixed(2);
+      last.volume = +(last.volume + Math.abs((Math.random()-0.5)*0.2)).toFixed(4);
+      candles.update(last);
+      volume.update({ time:last.time, value:last.volume, color:last.close>=last.open ? '#26a69a' : '#ef5350' });
+    }, 1000);
   </script>
-  
+</body>
+</html>
