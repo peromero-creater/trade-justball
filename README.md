@@ -35,4 +35,4 @@ We do **not** use TradingView data. We aggregate exchange data via our connector
 `POST /orders`, `DELETE /orders/{id}`, `GET /orders`, `GET /positions`, `GET /balances`, and WS `/ws/orders` for updates.
 
 **Initial symbol for demo:** `BTCUSDT` (others will be added).  
-**Contact:** YOUR NAME · EMAIL · GitHub: https://github.com/YOUR_USERNAME
+
